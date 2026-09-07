@@ -9,6 +9,14 @@ def load_cv_profile(path: str = "config/cv_profile.yaml") -> Dict[str, Any]:
     except Exception:
         return {}
 
+def resolve_city_for_job(job: Dict[str, Any], default_city: str = "") -> str:
+    loc = (job.get("location") or "").lower()
+    if any(c in loc for c in ["munich", "münchen"]):
+        return "Munich"
+    if any(c in loc for c in ["zurich", "zürich", "switzerland", "schweiz"]):
+        return "Zurich"
+    return default_city if default_city else (job.get("location") or "Other")
+
 def filter_by_title_only(job_or_title: Union[Dict[str, Any], str], cv_profile: Dict[str, Any] = None) -> Tuple[bool, str]:
     if isinstance(job_or_title, dict):
         title = job_or_title.get("title", "")
