@@ -53,14 +53,17 @@ def fetch_greenhouse(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict
         if res.status_code == 200:
             for item in res.json().get("jobs", []):
                 loc = item.get("location", {}).get("name", "")
+                title = item.get("title", "")
+                comp = entry.get("name", "Unknown")
                 if is_location_match(loc, target_locs):
                     jobs.append({
-                        "company": entry.get("name", "Unknown"),
-                        "title": item.get("title"),
+                        "company": comp,
+                        "title": title,
                         "location": loc,
                         "url": item.get("absolute_url"),
                         "ats": "Greenhouse",
-                        "date_posted": item.get("updated_at")
+                        "date_posted": item.get("updated_at"),
+                        "description": f"{title} position at {comp} in {loc}"
                     })
     except Exception as e:
         logging.error(f"Greenhouse error for {entry.get('name')}: {e}")
@@ -74,14 +77,17 @@ def fetch_lever(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str,
         if res.status_code == 200:
             for item in res.json():
                 loc = item.get("categories", {}).get("location", "")
+                title = item.get("text", "")
+                comp = entry.get("name", "Unknown")
                 if is_location_match(loc, target_locs):
                     jobs.append({
-                        "company": entry.get("name", "Unknown"),
-                        "title": item.get("text"),
+                        "company": comp,
+                        "title": title,
                         "location": loc,
                         "url": item.get("hostedUrl"),
                         "ats": "Lever",
-                        "date_posted": str(item.get("createdAt", ""))
+                        "date_posted": str(item.get("createdAt", "")),
+                        "description": f"{title} position at {comp} in {loc}"
                     })
     except Exception as e:
         logging.error(f"Lever error for {entry.get('name')}: {e}")
@@ -96,14 +102,17 @@ def fetch_personio(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[s
             root = ET.fromstring(res.content)
             for position in root.findall(".//position"):
                 office = position.findtext("office", "")
+                title = position.findtext("name", "")
+                comp = entry.get("name", "Unknown")
                 if is_location_match(office, target_locs):
                     jobs.append({
-                        "company": entry.get("name", "Unknown"),
-                        "title": position.findtext("name", ""),
+                        "company": comp,
+                        "title": title,
                         "location": office,
                         "url": f"https://{entry['company_id']}.jobs.personio.de/job/{position.findtext('id', '')}",
                         "ats": "Personio",
-                        "date_posted": None
+                        "date_posted": None,
+                        "description": f"{title} position at {comp} in {office}"
                     })
     except Exception as e:
         logging.error(f"Personio error for {entry.get('name')}: {e}")
@@ -119,14 +128,17 @@ def fetch_smartrecruiters(entry: Dict[str, Any], target_locs: List[str]) -> List
                 city = item.get("location", {}).get("city", "")
                 country = item.get("location", {}).get("country", "")
                 loc = f"{city}, {country}".strip(", ")
+                title = item.get("name", "")
+                comp = entry.get("name", "Unknown")
                 if is_location_match(loc, target_locs):
                     jobs.append({
-                        "company": entry.get("name", "Unknown"),
-                        "title": item.get("name"),
+                        "company": comp,
+                        "title": title,
                         "location": loc,
                         "url": f"https://jobs.smartrecruiters.com/{entry['company_id']}/{item.get('id')}",
                         "ats": "SmartRecruiters",
-                        "date_posted": item.get("releasedDate")
+                        "date_posted": item.get("releasedDate"),
+                        "description": f"{title} position at {comp} in {loc}"
                     })
     except Exception as e:
         logging.error(f"SmartRecruiters error for {entry.get('name')}: {e}")
@@ -144,14 +156,17 @@ def fetch_workday(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[st
         if res.status_code == 200:
             for item in res.json().get("jobPostings", []):
                 loc = item.get("location", "")
+                title = item.get("title", "")
+                comp = entry.get("name", "Unknown")
                 if is_location_match(loc, target_locs):
                     jobs.append({
-                        "company": entry.get("name", "Unknown"),
-                        "title": item.get("title"),
+                        "company": comp,
+                        "title": title,
                         "location": loc,
                         "url": f"https://{domain}/en-US/{client_site}{item.get('externalPath', '')}",
                         "ats": "Workday",
-                        "date_posted": item.get("postedOn")
+                        "date_posted": item.get("postedOn"),
+                        "description": f"{title} position at {comp} in {loc}"
                     })
     except Exception as e:
         logging.error(f"Workday error for {entry.get('name')}: {e}")
@@ -165,14 +180,17 @@ def fetch_ashby(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str,
         if res.status_code == 200:
             for item in res.json().get("jobs", []):
                 loc = item.get("locationName", "")
+                title = item.get("title", "")
+                comp = entry.get("name", "Unknown")
                 if is_location_match(loc, target_locs):
                     jobs.append({
-                        "company": entry.get("name", "Unknown"),
-                        "title": item.get("title"),
+                        "company": comp,
+                        "title": title,
                         "location": loc,
                         "url": item.get("jobUrl"),
                         "ats": "Ashby",
-                        "date_posted": item.get("publishedAt")
+                        "date_posted": item.get("publishedAt"),
+                        "description": f"{title} position at {comp} in {loc}"
                     })
     except Exception as e:
         logging.error(f"Ashby error for {entry.get('name')}: {e}")
@@ -186,14 +204,17 @@ def fetch_recruitee(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[
         if res.status_code == 200:
             for item in res.json().get("offers", []):
                 loc = item.get("location", "")
+                title = item.get("title", "")
+                comp = entry.get("name", "Unknown")
                 if is_location_match(loc, target_locs):
                     jobs.append({
-                        "company": entry.get("name", "Unknown"),
-                        "title": item.get("title"),
+                        "company": comp,
+                        "title": title,
                         "location": loc,
                         "url": item.get("careers_url"),
                         "ats": "Recruitee",
-                        "date_posted": item.get("created_at")
+                        "date_posted": item.get("created_at"),
+                        "description": f"{title} position at {comp} in {loc}"
                     })
     except Exception as e:
         logging.error(f"Recruitee error for {entry.get('name')}: {e}")
@@ -208,14 +229,17 @@ def fetch_teamtailor(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict
             for item in res.json().get("data", []):
                 attrs = item.get("attributes", {})
                 loc = attrs.get("location-name", "") or attrs.get("city", "")
+                title = attrs.get("title", "")
+                comp = entry.get("name", "Unknown")
                 if is_location_match(loc, target_locs):
                     jobs.append({
-                        "company": entry.get("name", "Unknown"),
-                        "title": attrs.get("title"),
+                        "company": comp,
+                        "title": title,
                         "location": loc,
                         "url": attrs.get("url"),
                         "ats": "Teamtailor",
-                        "date_posted": attrs.get("created-at")
+                        "date_posted": attrs.get("created-at"),
+                        "description": f"{title} position at {comp} in {loc}"
                     })
     except Exception as e:
         logging.error(f"Teamtailor error for {entry.get('name')}: {e}")
