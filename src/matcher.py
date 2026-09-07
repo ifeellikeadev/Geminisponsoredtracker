@@ -9,6 +9,13 @@ def load_cv_profile(path: str = "config/cv_profile.yaml") -> Dict[str, Any]:
     except Exception:
         return {}
 
+def extract_location_snippet(job_or_text: Any, max_len: int = 100) -> str:
+    if isinstance(job_or_text, dict):
+        loc = job_or_text.get("location") or job_or_text.get("city") or ""
+    else:
+        loc = str(job_or_text or "")
+    return loc[:max_len]
+
 def resolve_city_for_job(job: Dict[str, Any], default_city: str = "") -> str:
     loc = (job.get("location") or "").lower()
     if any(c in loc for c in ["munich", "münchen"]):
