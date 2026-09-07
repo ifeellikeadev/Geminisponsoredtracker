@@ -1,16 +1,8 @@
 import yaml
-import re
-from typing import Dict, List, Any, Tuple, Union
+from typing import Dict, List, Any, Optional
 
 MAIN_LIST_CITIES = ["Munich", "Zurich"]
-
-class FilterResult(tuple):
-    """Custom tuple subclass that evaluates as its boolean status in conditional checks."""
-    def __new__(cls, passed: bool, reason: str):
-        return super().__new__(cls, (passed, reason))
-    
-    def __bool__(self):
-        return bool(self[0])
+SWISS_CITIES = ["Basel", "Bern", "Geneva", "Lausanne", "Lucerne"]
 
 def load_cv_profile(path: str = "config/cv_profile.yaml") -> Dict[str, Any]:
     try:
@@ -19,130 +11,74 @@ def load_cv_profile(path: str = "config/cv_profile.yaml") -> Dict[str, Any]:
     except Exception:
         return {}
 
-def extract_location_snippet(job_or_text: Any, max_len: int = 100) -> str:
-    if isinstance(job_or_text, dict):
-        loc = job_or_text.get("location") or job_or_text.get("city") or ""
-    else:
-        loc = str(job_or_text or "")
-    return str(loc)[:max_len]
-
-def resolve_city_for_job(job: Any, default_city: str = "") -> str:
-    if isinstance(job, dict):
-        loc = (job.get("location") or job.get("city") or "").lower()
-        raw_loc = job.get("location") or job.get("city") or ""
-    else:
-        loc = str(job or "").lower()
-        raw_loc = str(job or "")
-
-    if any(c in loc for c in ["munich", "münchen"]):
-        return "Munich"
-    if any(c in loc for c in ["zurich", "zürich", "switzerland", "schweiz"]):
-        return "Zurich"
+def filter_by_title_only(jobs: List[Dict[str, Any]], cv_profile: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if not cv_profile:
+        return jobs
         
-    return default_city if default_city else (raw_loc or "Other")
+    exclude_keywords = [k.lower() for k in cv_profile.get("exclude_keywords", []) if k]
+    keywords = [k.lower() for k in cv_profile.get("keywords", []) if k]
+    
+    filtered = []
+    for job in jobs:
+        title = job.get("title", "").lower()
+        
+        if any(ex in title for ex in exclude_keywords):
+            continue
+            
+        if not keywords or any(k in title for k in keywords):
+            filtered.append(job)
+        else:
+            generic_tech = ["engineer", "developer", "software", "data", "product", "manager", "lead", "architect", "analyst"]
+            if any(term in title for term in generic_tech):
+                filtered.append(job)
+                
+    return filtered
 
-def _filter_single_job(job_or_title: Union[Dict[str, Any], str], cv_profile: Dict[str, Any] = None) -> FilterResult:
-    if isinstance(job_or_title, dict):
-        title = job_or_title.get("title", "")
+def resolve_city_for_job(job: Dict[str, Any], search_text: Optional[str] = None) -> Optional[str]:
+    loc = str(job.get("location") or job.get("city") or "").lower()
+    search = str(search_text or "").lower()
+    combined = f"{loc} {search}"
+
+    matched = None
+    if any(c in combined for c in ["munich", "münchen"]):
+        matched = "Munich"
+    elif any(c in combined for c in ["zurich", "zürich"]):
+        matched = "Zurich"
     else:
-        title = str(job_or_title or "")
+        for city in SWISS_CITIES:
+            if city.lower() in combined:
+                matched = city
+                break
 
-    if not cv_profile:
-        return FilterResult(True, "No CV profile provided")
+    if not matched:
+        if "switzerland" in combined or "schweiz" in combined:
+            matched = "Zurich"
+        elif "germany" in combined or "deutschland" in combined:
+            matched = "Munich"
 
-    title_lower = title.lower()
-    exclude_keywords = [k.lower() for k in cv_profile.get("exclude_keywords", []) if k]
-    for ex in exclude_keywords:
-        if ex in title_lower:
-            return FilterResult(False, f"Excluded keyword matched: {ex}")
-
-    keywords = [k.lower() for k in cv_profile.get("keywords", []) if k]
-    if not keywords:
-        return FilterResult(True, "No target keywords specified")
-
-    matched = [k for k in keywords if k in title_lower]
     if matched:
-        return FilterResult(True, f"Title matched keywords: {', '.join(matched)}")
+        job["matched_city"] = matched  # CRITICAL: prevents KeyError in main.py line 168
+        return matched
+        
+    return None
 
-    generic_tech = [
-        "engineer", "developer", "software", "data", "product", "manager", 
-        "lead", "architect", "analyst", "specialist", "consultant", "intern", 
-        "working student", "werkstudent"
-    ]
-    if any(term in title_lower for term in generic_tech):
-        return FilterResult(True, "Generic tech title match")
+def extract_location_snippet(text: str, city: str) -> str:
+    if not text:
+        return city
+    idx = text.lower().find(city.lower())
+    if idx == -1:
+        return city
+    start = max(0, idx - 40)
+    end = min(len(text), idx + 60)
+    snippet = text[start:end].replace('\n', ' ').strip()
+    return f"...{snippet}..." if start > 0 else f"{snippet}..."
 
-    return FilterResult(True, "Default pass")
-
-def filter_by_title_only(job_or_jobs: Any, cv_profile: Dict[str, Any] = None) -> Any:
-    if isinstance(job_or_jobs, list):
-        return [
-            j for j in job_or_jobs 
-            if isinstance(j, dict) and bool(_filter_single_job(j, cv_profile))
-        ]
-    return _filter_single_job(job_or_jobs, cv_profile)
-
-def score_job(job: Dict[str, Any], cv_profile: Dict[str, Any]) -> Tuple[int, str]:
-    if not isinstance(job, dict):
-        return 50, "Non-dict job pass"
-
-    title = (job.get("title") or "").lower()
-    desc = (job.get("description") or "").lower()
-    text = f"{title} {desc}"
-
-    if not cv_profile:
-        return 75, "No CV profile provided"
-
-    keywords = [k.lower() for k in cv_profile.get("keywords", []) if k]
-    exclude_keywords = [k.lower() for k in cv_profile.get("exclude_keywords", []) if k]
-
-    for ex in exclude_keywords:
-        if ex in text:
-            return 0, f"Excluded keyword matched: {ex}"
-
-    matched = [k for k in keywords if k in text]
-    if matched:
-        score = min(100, 60 + (len(matched) * 10))
-        return score, f"Matched keywords: {', '.join(matched)}"
-
-    generic_tech = ["engineer", "developer", "software", "data", "product", "manager", "lead", "architect", "analyst"]
-    if any(term in title for term in generic_tech):
-        return 70, "Generic tech title match"
-
-    return 50, "General listing pass"
-
-def score_jobs(jobs: Any, cv_profile: Dict[str, Any] = None) -> Any:
-    if isinstance(jobs, list):
-        res = []
-        for j in jobs:
-            if isinstance(j, dict):
-                s, r = score_job(j, cv_profile)
-                j_copy = dict(j)
-                j_copy["score"] = s
-                j_copy["match_reason"] = r
-                res.append(j_copy)
-        return res
-    elif isinstance(jobs, dict):
-        s, r = score_job(jobs, cv_profile)
-        j_copy = dict(jobs)
-        j_copy["score"] = s
-        j_copy["match_reason"] = r
-        return j_copy
-    return jobs
-
-def match_job(job: Dict[str, Any], cv_profile: Dict[str, Any]) -> Tuple[int, str]:
-    return score_job(job, cv_profile)
-
-def calculate_match_score(job: Dict[str, Any], cv_profile: Dict[str, Any]) -> Tuple[int, str]:
-    return score_job(job, cv_profile)
-
-def __getattr__(name: str) -> Any:
-    if name.isupper():
-        return ["Munich", "Zurich"]
-    def _smart_fallback(arg=None, *args, **kwargs):
-        if isinstance(arg, list):
-            return arg
-        if isinstance(arg, dict):
-            return arg
-        return FilterResult(True, f"Fallback for {name}")
-    return _smart_fallback
+def score_jobs(jobs: List[Dict[str, Any]], cv_profile: Dict[str, Any]) -> None:
+    keywords = [k.lower() for k in cv_profile.get("keywords", []) if k] if cv_profile else []
+    for job in jobs:
+        text = f"{job.get('title', '')} {job.get('description', '')}".lower()
+        score = 50
+        if keywords:
+            matched = sum(1 for k in keywords if k in text)
+            score = min(100, 60 + (matched * 10))
+        job["relevance_score"] = score  # CRITICAL: tracker.py expects 'relevance_score'
