@@ -2,7 +2,6 @@ import logging
 import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Any
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -13,14 +12,14 @@ DEFAULT_HEADERS = {
     "Accept-Language": "en-US,en;q=0.5"
 }
 
-# --- Compatibility Wrappers for src/main.py ---
+# --- Exports required by src/main.py ---
 
 def reset_headless_budget():
-    """No-op function to maintain interface compatibility with main.py."""
+    """Interface compatibility stub for main.py."""
     pass
 
 def fetch_description_fallback(url: str, ats_type: str = "") -> str:
-    """Fallback fetcher to maintain interface compatibility with main.py."""
+    """Fallback description retriever for main.py."""
     try:
         res = requests.get(url, headers=DEFAULT_HEADERS, timeout=8)
         if res.status_code == 200:
@@ -30,11 +29,11 @@ def fetch_description_fallback(url: str, ats_type: str = "") -> str:
         pass
     return ""
 
-def is_location_match(location_str: str, target_locations: List[str]) -> bool:
-    if not target_locations:
+def is_location_match(location_str: str, target_locs: List[str]) -> bool:
+    if not target_locs:
         return True
     loc_lower = (location_str or "").lower()
-    return any(target.lower() in loc_lower for target in target_locations) or "remote" in loc_lower
+    return any(t.lower() in loc_lower for t in target_locs) or "remote" in loc_lower
 
 def make_request(url: str, method: str = "GET", json_payload: Dict = None) -> requests.Response:
     session = requests.Session()
@@ -45,7 +44,7 @@ def make_request(url: str, method: str = "GET", json_payload: Dict = None) -> re
 
 # --- ATS Handlers ---
 
-def fetch_greenhouse(entry: Dict[str, Any], target_locations: List[str]) -> List[Dict[str, Any]]:
+def fetch_greenhouse(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
     jobs = []
     try:
         url = f"https://boards-api.greenhouse.io/v1/boards/{entry['board_token']}/jobs?content=true"
@@ -53,7 +52,7 @@ def fetch_greenhouse(entry: Dict[str, Any], target_locations: List[str]) -> List
         if res.status_code == 200:
             for item in res.json().get("jobs", []):
                 loc = item.get("location", {}).get("name", "")
-                if is_location_match(loc, target_locations):
+                if is_location_match(loc, target_locs):
                     jobs.append({
                         "company": entry["company"],
                         "title": item.get("title"),
@@ -66,7 +65,7 @@ def fetch_greenhouse(entry: Dict[str, Any], target_locations: List[str]) -> List
         logging.error(f"Greenhouse error for {entry.get('company')}: {e}")
     return jobs
 
-def fetch_lever(entry: Dict[str, Any], target_locations: List[str]) -> List[Dict[str, Any]]:
+def fetch_lever(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
     jobs = []
     try:
         url = f"https://api.lever.co/v0/postings/{entry['board_token']}"
@@ -74,7 +73,7 @@ def fetch_lever(entry: Dict[str, Any], target_locations: List[str]) -> List[Dict
         if res.status_code == 200:
             for item in res.json():
                 loc = item.get("categories", {}).get("location", "")
-                if is_location_match(loc, target_locations):
+                if is_location_match(loc, target_locs):
                     jobs.append({
                         "company": entry["company"],
                         "title": item.get("text"),
@@ -87,7 +86,7 @@ def fetch_lever(entry: Dict[str, Any], target_locations: List[str]) -> List[Dict
         logging.error(f"Lever error for {entry.get('company')}: {e}")
     return jobs
 
-def fetch_personio(entry: Dict[str, Any], target_locations: List[str]) -> List[Dict[str, Any]]:
+def fetch_personio(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
     jobs = []
     try:
         url = f"https://{entry['company_id']}.jobs.personio.de/xml"
@@ -96,7 +95,7 @@ def fetch_personio(entry: Dict[str, Any], target_locations: List[str]) -> List[D
             root = ET.fromstring(res.content)
             for position in root.findall(".//position"):
                 office = position.findtext("office", "")
-                if is_location_match(office, target_locations):
+                if is_location_match(office, target_locs):
                     jobs.append({
                         "company": entry["company"],
                         "title": position.findtext("name", ""),
@@ -109,7 +108,7 @@ def fetch_personio(entry: Dict[str, Any], target_locations: List[str]) -> List[D
         logging.error(f"Personio error for {entry.get('company')}: {e}")
     return jobs
 
-def fetch_smartrecruiters(entry: Dict[str, Any], target_locations: List[str]) -> List[Dict[str, Any]]:
+def fetch_smartrecruiters(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
     jobs = []
     try:
         url = f"https://api.smartrecruiters.com/v1/companies/{entry['company_id']}/postings"
@@ -119,7 +118,7 @@ def fetch_smartrecruiters(entry: Dict[str, Any], target_locations: List[str]) ->
                 city = item.get("location", {}).get("city", "")
                 country = item.get("location", {}).get("country", "")
                 loc = f"{city}, {country}".strip(", ")
-                if is_location_match(loc, target_locations):
+                if is_location_match(loc, target_locs):
                     jobs.append({
                         "company": entry["company"],
                         "title": item.get("name"),
@@ -132,7 +131,7 @@ def fetch_smartrecruiters(entry: Dict[str, Any], target_locations: List[str]) ->
         logging.error(f"SmartRecruiters error for {entry.get('company')}: {e}")
     return jobs
 
-def fetch_workday(entry: Dict[str, Any], target_locations: List[str]) -> List[Dict[str, Any]]:
+def fetch_workday(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
     jobs = []
     try:
         domain = entry["domain"]
@@ -144,7 +143,7 @@ def fetch_workday(entry: Dict[str, Any], target_locations: List[str]) -> List[Di
         if res.status_code == 200:
             for item in res.json().get("jobPostings", []):
                 loc = item.get("location", "")
-                if is_location_match(loc, target_locations):
+                if is_location_match(loc, target_locs):
                     jobs.append({
                         "company": entry["company"],
                         "title": item.get("title"),
@@ -157,70 +156,17 @@ def fetch_workday(entry: Dict[str, Any], target_locations: List[str]) -> List[Di
         logging.error(f"Workday error for {entry.get('company')}: {e}")
     return jobs
 
-def fetch_custom_html(entry: Dict[str, Any], target_locations: List[str]) -> List[Dict[str, Any]]:
-    jobs = []
-    try:
-        res = make_request(entry["url"])
-        if res.status_code == 200:
-            soup = BeautifulSoup(res.text, "html.parser")
-            job_cards = soup.select(entry.get("job_selector", ".job"))
-            for card in job_cards:
-                title_el = card.select_one(entry.get("title_selector", "a"))
-                link_el = card.select_one(entry.get("link_selector", "a"))
-                loc_el = card.select_one(entry.get("location_selector", ".location"))
-                
-                title = title_el.get_text(strip=True) if title_el else "Unknown Title"
-                url = link_el.get("href", "") if link_el else entry["url"]
-                loc = loc_el.get_text(strip=True) if loc_el else "Not Specified"
-                
-                if not url.startswith("http"):
-                    base_url = "/".join(entry["url"].split("/")[:3])
-                    url = f"{base_url}{url}"
-
-                if is_location_match(loc, target_locations):
-                    jobs.append({
-                        "company": entry["company"],
-                        "title": title,
-                        "location": loc,
-                        "url": url,
-                        "ats": "Custom Portal",
-                        "date_posted": None
-                    })
-    except Exception as e:
-        logging.error(f"Custom HTML error for {entry.get('company')}: {e}")
-    return jobs
-
 SCRAPER_MAP = {
     "greenhouse": fetch_greenhouse,
     "lever": fetch_lever,
     "personio": fetch_personio,
     "smartrecruiters": fetch_smartrecruiters,
-    "workday": fetch_workday,
-    "custom_html": fetch_custom_html
+    "workday": fetch_workday
 }
 
-def scrape_company_entry(entry: Dict[str, Any], target_locations: List[str]) -> List[Dict[str, Any]]:
+def scrape_company(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Single-argument entrypoint invoked by main.py."""
     ats = entry.get("ats", "").lower()
+    target_locs = [entry.get("location")] if entry.get("location") else ["Munich", "München", "Zurich", "Zürich"]
     scraper_fn = SCRAPER_MAP.get(ats)
-    return scraper_fn(entry, target_locations) if scraper_fn else []
-
-# Export scrape_company for main.py compatibility
-scrape_company = scrape_company_entry
-
-def run_all_scrapers(config: Dict[str, Any]) -> List[Dict[str, Any]]:
-    all_jobs = []
-    tasks = []
-
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        for area, target_locs in [("munich_area", ["Munich", "München"]), ("zurich_area", ["Zurich", "Zürich"])]:
-            for entry in config.get(area, []):
-                tasks.append(executor.submit(scrape_company_entry, entry, target_locs))
-
-        for future in as_completed(tasks):
-            try:
-                all_jobs.extend(future.result())
-            except Exception as e:
-                logging.error(f"Task exception: {e}")
-
-    logging.info(f"Scraped {len(all_jobs)} jobs across all systems.")
-    return all_jobs
+    return scraper_fn(entry, target_locs) if scraper_fn else []
