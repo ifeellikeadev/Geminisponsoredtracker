@@ -26,10 +26,17 @@ def fetch_description_fallback(url: str, ats_type: str = "") -> str:
     return ""
 
 def is_location_match(location_str: str, target_locs: List[str]) -> bool:
-    if not target_locs:
+    if not location_str:
         return True
-    loc_lower = (location_str or "").lower()
-    return any(t.lower() in loc_lower for t in target_locs) or "remote" in loc_lower or "switzerland" in loc_lower or "germany" in loc_lower
+    loc_lower = location_str.lower()
+    
+    if target_locs:
+        for t in target_locs:
+            if t and t.lower() in loc_lower:
+                return True
+                
+    broad_regional = ["remote", "switzerland", "schweiz", "germany", "deutschland", "dach", "munich", "münchen", "zurich", "zürich"]
+    return any(keyword in loc_lower for keyword in broad_regional)
 
 def make_request(url: str, method: str = "GET", json_payload: Dict = None) -> requests.Response:
     session = requests.Session()
@@ -171,13 +178,58 @@ def fetch_ashby(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str,
         logging.error(f"Ashby error for {entry.get('name')}: {e}")
     return jobs
 
+def fetch_recruitee(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
+    jobs = []
+    try:
+        url = f"https://{entry['company_id']}.recruitee.com/api/offers"
+        res = make_request(url)
+        if res.status_code == 200:
+            for item in res.json().get("offers", []):
+                loc = item.get("location", "")
+                if is_location_match(loc, target_locs):
+                    jobs.append({
+                        "company": entry.get("name", "Unknown"),
+                        "title": item.get("title"),
+                        "location": loc,
+                        "url": item.get("careers_url"),
+                        "ats": "Recruitee",
+                        "date_posted": item.get("created_at")
+                    })
+    except Exception as e:
+        logging.error(f"Recruitee error for {entry.get('name')}: {e}")
+    return jobs
+
+def fetch_teamtailor(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
+    jobs = []
+    try:
+        url = f"https://{entry['company_id']}.teamtailor.com/jobs.json"
+        res = make_request(url)
+        if res.status_code == 200:
+            for item in res.json().get("data", []):
+                attrs = item.get("attributes", {})
+                loc = attrs.get("location-name", "") or attrs.get("city", "")
+                if is_location_match(loc, target_locs):
+                    jobs.append({
+                        "company": entry.get("name", "Unknown"),
+                        "title": attrs.get("title"),
+                        "location": loc,
+                        "url": attrs.get("url"),
+                        "ats": "Teamtailor",
+                        "date_posted": attrs.get("created-at")
+                    })
+    except Exception as e:
+        logging.error(f"Teamtailor error for {entry.get('name')}: {e}")
+    return jobs
+
 SCRAPER_MAP = {
     "greenhouse": fetch_greenhouse,
     "lever": fetch_lever,
     "personio": fetch_personio,
     "smartrecruiters": fetch_smartrecruiters,
     "workday": fetch_workday,
-    "ashby": fetch_ashby
+    "ashby": fetch_ashby,
+    "recruitee": fetch_recruitee,
+    "teamtailor": fetch_teamtailor
 }
 
 def scrape_company(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
