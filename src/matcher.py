@@ -16,12 +16,12 @@ def filter_by_title_only(jobs: List[Dict[str, Any]], cv_profile: Dict[str, Any])
     exclude_keywords = [k.lower() for k in cv_profile.get("exclude_keywords", []) if k] if cv_profile else []
     keywords = [k.lower() for k in cv_profile.get("keywords", []) if k] if cv_profile else []
     
-    # Stricter generic tech terms using word boundaries
+    # Ultra-strict generic tech terms: no standalone "engineer", "ai", "lead", or "manager"
     generic_tech = [
-        "software", "developer", "engineer", "backend", "frontend", "fullstack", 
-        "full-stack", "devops", "machine learning", "ai", "artificial intelligence", 
-        "sre", "cloud", "architect", "product manager", "product owner", 
-        "data scientist", "data analyst", "data engineer", "quantitative"
+        "software", "backend", "frontend", "fullstack", "full-stack", 
+        "devops", "sre", "machine learning", "data scientist", 
+        "data engineer", "cloud", "platform engineer", 
+        "ai engineer", "ai research"
     ]
     
     filtered = []
@@ -71,9 +71,16 @@ def resolve_city_for_job(job: Dict[str, Any], search_text: Optional[str] = None)
 def extract_location_snippet(text: str, city: str) -> str:
     if not text:
         return city
-    idx = text.lower().find(city.lower())
+    
+    # Prevent anti-bot/JS warnings from bleeding into the Excel file
+    text_lower = text.lower()
+    if "enable javascript" in text_lower or "javascript to run" in text_lower:
+        return city
+        
+    idx = text_lower.find(city.lower())
     if idx == -1:
         return city
+        
     start = max(0, idx - 40)
     end = min(len(text), idx + 60)
     snippet = text[start:end].replace('\n', ' ').strip()
@@ -82,9 +89,11 @@ def extract_location_snippet(text: str, city: str) -> str:
 def score_jobs(jobs: List[Dict[str, Any]], cv_profile: Dict[str, Any]) -> None:
     keywords = [k.lower() for k in cv_profile.get("keywords", []) if k] if cv_profile else []
     for job in jobs:
-        # Map ATS scraper 'date_posted' to tracker 'posted_date'
-        if "date_posted" in job and "posted_date" not in job:
-            job["posted_date"] = job["date_posted"]
+        # Map ATS 'date_posted' to tracker 'posted_date' and cleanly format to YYYY-MM-DD
+        if job.get("date_posted"):
+            raw_date = str(job["date_posted"])
+            match = re.search(r'\d{4}-\d{2}-\d{2}', raw_date)
+            job["posted_date"] = match.group(0) if match else raw_date
             
         text = f"{job.get('title', '')} {job.get('description', '')}".lower()
         score = 50
