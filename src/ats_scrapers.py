@@ -29,7 +29,7 @@ def is_location_match(location_str: str, target_locs: List[str]) -> bool:
     if not target_locs:
         return True
     loc_lower = (location_str or "").lower()
-    return any(t.lower() in loc_lower for t in target_locs) or "remote" in loc_lower
+    return any(t.lower() in loc_lower for t in target_locs) or "remote" in loc_lower or "switzerland" in loc_lower or "germany" in loc_lower
 
 def make_request(url: str, method: str = "GET", json_payload: Dict = None) -> requests.Response:
     session = requests.Session()
@@ -132,7 +132,7 @@ def fetch_workday(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[st
         client_site = entry.get("client_site", "External")
         tenant = domain.split(".")[0]
         url = f"https://{domain}/wday/cxs/{tenant}/{client_site}/jobs"
-        payload = {"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": ""}
+        payload = {"appliedFacets": {}, "limit": 50, "offset": 0, "searchText": ""}
         res = make_request(url, method="POST", json_payload=payload)
         if res.status_code == 200:
             for item in res.json().get("jobPostings", []):
@@ -150,16 +150,38 @@ def fetch_workday(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[st
         logging.error(f"Workday error for {entry.get('name')}: {e}")
     return jobs
 
+def fetch_ashby(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
+    jobs = []
+    try:
+        url = f"https://api.ashbyhq.com/posting-api/job-board/{entry['board_token']}"
+        res = make_request(url)
+        if res.status_code == 200:
+            for item in res.json().get("jobs", []):
+                loc = item.get("locationName", "")
+                if is_location_match(loc, target_locs):
+                    jobs.append({
+                        "company": entry.get("name", "Unknown"),
+                        "title": item.get("title"),
+                        "location": loc,
+                        "url": item.get("jobUrl"),
+                        "ats": "Ashby",
+                        "date_posted": item.get("publishedAt")
+                    })
+    except Exception as e:
+        logging.error(f"Ashby error for {entry.get('name')}: {e}")
+    return jobs
+
 SCRAPER_MAP = {
     "greenhouse": fetch_greenhouse,
     "lever": fetch_lever,
     "personio": fetch_personio,
     "smartrecruiters": fetch_smartrecruiters,
-    "workday": fetch_workday
+    "workday": fetch_workday,
+    "ashby": fetch_ashby
 }
 
 def scrape_company(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
     ats = entry.get("ats", "").lower()
-    target_locs = [entry.get("location")] if entry.get("location") else ["Munich", "München", "Zurich", "Zürich"]
+    target_locs = [entry.get("location")] if entry.get("location") else ["Munich", "München", "Zurich", "Zürich", "Switzerland"]
     scraper_fn = SCRAPER_MAP.get(ats)
     return scraper_fn(entry, target_locs) if scraper_fn else []
