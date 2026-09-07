@@ -1,6 +1,6 @@
 import yaml
 import re
-from typing import Dict, Any, Tuple, Union
+from typing import Dict, List, Any, Tuple, Union
 
 def load_cv_profile(path: str = "config/cv_profile.yaml") -> Dict[str, Any]:
     try:
@@ -83,6 +83,15 @@ def score_job(job: Dict[str, Any], cv_profile: Dict[str, Any]) -> Tuple[int, str
 
     return 50, "General listing pass"
 
+# --- Batch Processing Function Required by main.py ---
+def score_jobs(jobs: List[Dict[str, Any]], cv_profile: Dict[str, Any]) -> List[Dict[str, Any]]:
+    for job in jobs:
+        score, reason = score_job(job, cv_profile)
+        job["score"] = score
+        job["match_reason"] = reason
+    return jobs
+
+# --- Aliases just in case main.py looks for alternate names ---
 def match_job(job: Dict[str, Any], cv_profile: Dict[str, Any]) -> Tuple[int, str]:
     return score_job(job, cv_profile)
 
