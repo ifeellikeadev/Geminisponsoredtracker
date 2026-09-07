@@ -12,14 +12,10 @@ DEFAULT_HEADERS = {
     "Accept-Language": "en-US,en;q=0.5"
 }
 
-# --- Exports required by src/main.py ---
-
 def reset_headless_budget():
-    """Interface compatibility stub for main.py."""
     pass
 
 def fetch_description_fallback(url: str, ats_type: str = "") -> str:
-    """Fallback description retriever for main.py."""
     try:
         res = requests.get(url, headers=DEFAULT_HEADERS, timeout=8)
         if res.status_code == 200:
@@ -42,8 +38,6 @@ def make_request(url: str, method: str = "GET", json_payload: Dict = None) -> re
         return session.post(url, json=json_payload, timeout=12)
     return session.get(url, timeout=12)
 
-# --- ATS Handlers ---
-
 def fetch_greenhouse(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
     jobs = []
     try:
@@ -54,7 +48,7 @@ def fetch_greenhouse(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict
                 loc = item.get("location", {}).get("name", "")
                 if is_location_match(loc, target_locs):
                     jobs.append({
-                        "company": entry["company"],
+                        "company": entry.get("name", "Unknown"),
                         "title": item.get("title"),
                         "location": loc,
                         "url": item.get("absolute_url"),
@@ -62,7 +56,7 @@ def fetch_greenhouse(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict
                         "date_posted": item.get("updated_at")
                     })
     except Exception as e:
-        logging.error(f"Greenhouse error for {entry.get('company')}: {e}")
+        logging.error(f"Greenhouse error for {entry.get('name')}: {e}")
     return jobs
 
 def fetch_lever(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
@@ -75,7 +69,7 @@ def fetch_lever(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str,
                 loc = item.get("categories", {}).get("location", "")
                 if is_location_match(loc, target_locs):
                     jobs.append({
-                        "company": entry["company"],
+                        "company": entry.get("name", "Unknown"),
                         "title": item.get("text"),
                         "location": loc,
                         "url": item.get("hostedUrl"),
@@ -83,7 +77,7 @@ def fetch_lever(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str,
                         "date_posted": str(item.get("createdAt", ""))
                     })
     except Exception as e:
-        logging.error(f"Lever error for {entry.get('company')}: {e}")
+        logging.error(f"Lever error for {entry.get('name')}: {e}")
     return jobs
 
 def fetch_personio(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
@@ -97,7 +91,7 @@ def fetch_personio(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[s
                 office = position.findtext("office", "")
                 if is_location_match(office, target_locs):
                     jobs.append({
-                        "company": entry["company"],
+                        "company": entry.get("name", "Unknown"),
                         "title": position.findtext("name", ""),
                         "location": office,
                         "url": f"https://{entry['company_id']}.jobs.personio.de/job/{position.findtext('id', '')}",
@@ -105,7 +99,7 @@ def fetch_personio(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[s
                         "date_posted": None
                     })
     except Exception as e:
-        logging.error(f"Personio error for {entry.get('company')}: {e}")
+        logging.error(f"Personio error for {entry.get('name')}: {e}")
     return jobs
 
 def fetch_smartrecruiters(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
@@ -120,7 +114,7 @@ def fetch_smartrecruiters(entry: Dict[str, Any], target_locs: List[str]) -> List
                 loc = f"{city}, {country}".strip(", ")
                 if is_location_match(loc, target_locs):
                     jobs.append({
-                        "company": entry["company"],
+                        "company": entry.get("name", "Unknown"),
                         "title": item.get("name"),
                         "location": loc,
                         "url": f"https://jobs.smartrecruiters.com/{entry['company_id']}/{item.get('id')}",
@@ -128,7 +122,7 @@ def fetch_smartrecruiters(entry: Dict[str, Any], target_locs: List[str]) -> List
                         "date_posted": item.get("releasedDate")
                     })
     except Exception as e:
-        logging.error(f"SmartRecruiters error for {entry.get('company')}: {e}")
+        logging.error(f"SmartRecruiters error for {entry.get('name')}: {e}")
     return jobs
 
 def fetch_workday(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[str, Any]]:
@@ -145,7 +139,7 @@ def fetch_workday(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[st
                 loc = item.get("location", "")
                 if is_location_match(loc, target_locs):
                     jobs.append({
-                        "company": entry["company"],
+                        "company": entry.get("name", "Unknown"),
                         "title": item.get("title"),
                         "location": loc,
                         "url": f"https://{domain}/en-US/{client_site}{item.get('externalPath', '')}",
@@ -153,7 +147,7 @@ def fetch_workday(entry: Dict[str, Any], target_locs: List[str]) -> List[Dict[st
                         "date_posted": item.get("postedOn")
                     })
     except Exception as e:
-        logging.error(f"Workday error for {entry.get('company')}: {e}")
+        logging.error(f"Workday error for {entry.get('name')}: {e}")
     return jobs
 
 SCRAPER_MAP = {
@@ -165,7 +159,6 @@ SCRAPER_MAP = {
 }
 
 def scrape_company(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Single-argument entrypoint invoked by main.py."""
     ats = entry.get("ats", "").lower()
     target_locs = [entry.get("location")] if entry.get("location") else ["Munich", "München", "Zurich", "Zürich"]
     scraper_fn = SCRAPER_MAP.get(ats)
