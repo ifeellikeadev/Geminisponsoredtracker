@@ -13,29 +13,25 @@ def load_cv_profile(path: str = "config/cv_profile.yaml") -> Dict[str, Any]:
         return {}
 
 def filter_by_title_only(jobs: List[Dict[str, Any]], cv_profile: Dict[str, Any]) -> List[Dict[str, Any]]:
-    exclude_keywords = [k.lower() for k in cv_profile.get("exclude_keywords", []) if k] if cv_profile else []
-    keywords = [k.lower() for k in cv_profile.get("keywords", []) if k] if cv_profile else []
-    
-    # Ultra-strict generic tech terms: no standalone "engineer", "ai", "lead", or "manager"
-    generic_tech = [
-        "software", "backend", "frontend", "fullstack", "full-stack", 
-        "devops", "sre", "machine learning", "data scientist", 
-        "data engineer", "cloud", "platform engineer", 
-        "ai engineer", "ai research"
-    ]
+    if not cv_profile:
+        return jobs
+        
+    must_match = [k.lower() for k in cv_profile.get("title_must_match", [])]
+    must_not_match = [k.lower() for k in cv_profile.get("title_must_not_match", [])]
     
     filtered = []
     for job in jobs:
         title = job.get("title", "").lower()
         
-        if any(ex in title for ex in exclude_keywords):
+        # 1. Reject if it matches any exclusion word
+        if must_not_match and any(ex in title for ex in must_not_match):
             continue
             
-        if keywords and any(k in title for k in keywords):
-            filtered.append(job)
-            continue
-            
-        if any(re.search(rf"\b{re.escape(term)}\b", title) for term in generic_tech):
+        # 2. Accept if it matches any required word
+        if must_match:
+            if any(req in title for req in must_match):
+                filtered.append(job)
+        else:
             filtered.append(job)
             
     return filtered
@@ -72,7 +68,6 @@ def extract_location_snippet(text: str, city: str) -> str:
     if not text:
         return city
     
-    # Prevent anti-bot/JS warnings from bleeding into the Excel file
     text_lower = text.lower()
     if "enable javascript" in text_lower or "javascript to run" in text_lower:
         return city
@@ -87,17 +82,27 @@ def extract_location_snippet(text: str, city: str) -> str:
     return f"...{snippet}..." if start > 0 else f"{snippet}..."
 
 def score_jobs(jobs: List[Dict[str, Any]], cv_profile: Dict[str, Any]) -> None:
-    keywords = [k.lower() for k in cv_profile.get("keywords", []) if k] if cv_profile else []
+    scoring_keywords = cv_profile.get("scoring_keywords", [])
+    score_ceiling = cv_profile.get("score_ceiling", 20)
+    
     for job in jobs:
-        # Map ATS 'date_posted' to tracker 'posted_date' and cleanly format to YYYY-MM-DD
         if job.get("date_posted"):
             raw_date = str(job["date_posted"])
             match = re.search(r'\d{4}-\d{2}-\d{2}', raw_date)
             job["posted_date"] = match.group(0) if match else raw_date
             
         text = f"{job.get('title', '')} {job.get('description', '')}".lower()
-        score = 50
-        if keywords:
-            matched = sum(1 for k in keywords if k in text)
-            score = min(100, 60 + (matched * 10))
-        job["relevance_score"] = score
+        
+        raw_score = 0
+        for sk in scoring_keywords:
+            term = sk.get("term", "").lower()
+            weight = sk.get("weight", 0)
+            if term and term in text:
+                raw_score += weight
+                
+        if raw_score > 0:
+            scaled_score = min(10, max(1, round((raw_score / score_ceiling) * 10)))
+        else:
+            scaled_score = 1
+            
+        job["relevance_score"] = scaled_score
